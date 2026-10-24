@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parallel Parking</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap">
+<style>
+/* layout: banner, 3D scene with wheel overlay, controls, five step cards */
+:root{
+  --bg:#f3f1ea; --fg:#1d1f1a; --muted:#6b6e62; --car:#c8472c; --path:#1f6fb2; --card:#ffffff; --edge:#d9d5c8; --hud:rgba(255,255,255,.78);
+  --display:"Barlow Condensed",Impact,sans-serif; --body:"Barlow",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#17181a; --fg:#eceae2; --muted:#9b9f93; --car:#e0633f; --path:#5aa6e8; --card:#202327; --edge:#33373d; --hud:rgba(20,22,26,.78); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#17181a; --fg:#eceae2; --muted:#9b9f93; --car:#e0633f; --path:#5aa6e8; --card:#202327; --edge:#33373d; --hud:rgba(20,22,26,.78); color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:16px/1.45 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px}
+main{max-width:800px;margin:0 auto;display:grid;gap:16px}
+h1{font:700 40px/1 var(--display);margin:0;text-transform:uppercase;letter-spacing:.02em;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0}
+.hud{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--card);border:1px solid var(--edge);border-left:5px solid var(--car);color:var(--fg);padding:10px 14px;border-radius:4px;margin-bottom:-6px}
+.hud b{font:700 24px/1.1 var(--display);min-width:0;text-wrap:balance}
+.hud span{margin-left:auto;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border:1px solid var(--edge);padding:3px 8px;border-radius:999px}
+.scene{position:relative;aspect-ratio:16/9;max-width:100%;border-radius:6px;overflow:hidden;background:#87a9c9}
+.scene canvas{display:block;width:100%;height:100%}
+.wheel{position:absolute;right:12px;top:12px;width:96px;height:96px;background:var(--hud);border-radius:50%;display:grid;place-items:center}
+.wheel svg{width:80px;height:80px;transition:transform .12s linear}
+.wheel small{position:absolute;bottom:-20px;left:0;right:0;text-align:center;font-size:12px;color:var(--fg);text-transform:uppercase;letter-spacing:.08em}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.seg{display:flex;border:1px solid var(--edge);border-radius:4px;overflow:hidden}
+.seg button{border:0;border-radius:0}
+.seg button.on{background:var(--car);color:#fff}
+button{font:600 15px var(--display);text-transform:uppercase;letter-spacing:.06em;padding:8px 14px;border:1px solid var(--edge);
+  background:var(--card);color:var(--fg);border-radius:4px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--path);outline-offset:2px}
+button.primary{background:var(--car);color:#fff;border-color:var(--car)}
+label{font-size:14px;color:var(--muted);display:flex;gap:6px;align-items:center;margin-left:auto}
+.spec{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.step{background:var(--card);border:1px solid var(--edge);border-radius:4px;padding:10px 12px;min-width:0;opacity:.55;transition:opacity .2s}
+.step.on{opacity:1;border-color:var(--car)}
+.step b{font:700 22px/1 var(--display);display:block;margin-bottom:4px}
+.step .w{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.step p{margin:4px 0 0;font-size:14px}
+@media (prefers-reduced-motion: reduce){.step,.wheel svg{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <div><h1>Parallel Parking</h1><p class="sub">3D demo, right-side curb. Pick a car size. Blue line is the path driven so far. Drag the scene to orbit. Also: <a href="./">Three-point turn</a>.</p></div>
+  <div class="bar">
+    <div class="seg" id="variants"><button data-v="small" class="on">Small</button><button data-v="sedan">Sedan</button><button data-v="suv">SUV</button></div>
+    <span class="spec" id="spec"></span>
+  </div>
+  <div class="hud"><b id="hname">1 · Pull alongside the front car</b><span id="hmode">Drive</span></div>
+  <div class="scene" id="scene">
+    <div class="wheel"><svg id="wsvg" viewBox="-40 -40 80 80" aria-hidden="true"><circle r="34" fill="none" stroke="currentColor" stroke-width="7"/><path d="M-34 0H34M0 0V34" stroke="currentColor" stroke-width="5"/><circle r="7" fill="currentColor"/><circle cy="-34" r="5" fill="#c8472c"/></svg><small id="wlabel">straight</small></div>
+  </div>
+  <div class="bar">
+    <button id="play" class="primary">Pause</button>
+    <button id="restart">Restart</button>
+    <button id="next">Next step</button>
+    <button id="cam">Camera: wide</button>
+    <label>Speed <input id="spd" type="range" min="0.3" max="2" step="0.1" value="1"></label>
+  </div>
+  <div class="steps" id="steps">
+    <div class="step"><b>1</b><span class="w">Signal right · line up</span><p>Pull alongside the front car, about 1 m away, until your rear bumpers line up. Stop.</p></div>
+    <div class="step"><b>2</b><span class="w">Wheel full right · reverse</span><p>While stopped, turn the wheel all the way right. Back up slowly until the car sits at about 45°. Stop.</p></div>
+    <div class="step"><b>3</b><span class="w">Wheel straight · reverse</span><p>Straighten the wheel. Back up until your front bumper clears the car in front. Stop.</p></div>
+    <div class="step"><b>4</b><span class="w">Wheel full left · reverse</span><p>Turn the wheel all the way left. Back up until you are parallel to the curb. Stop.</p></div>
+    <div class="step"><b>5</b><span class="w">Wheel straight · centre</span><p>Straighten the wheel and pull forward to centre the car in the space.</p></div>
+  </div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(()=>{
+const fail=m=>{document.getElementById('scene').insertAdjacentHTML('beforeend','<p style="position:absolute;inset:0;margin:0;display:grid;place-items:center;padding:16px;text-align:center;color:#fff;background:#333">'+m+'</p>')};
+if(!window.THREE){fail('3D library did not load. Check connection and reload.');return}
+try{const t=document.createElement('canvas');if(!(t.getContext('webgl2')||t.getContext('webgl')))throw 0}catch(e){fail('WebGL is off in this browser.');return}
+window.addEventListener('error',e=>fail('Error: '+(e&&e.message||e)));
+// ---------- kinematics (metres; +x forward along the street, +z toward the right curb) ----------
+const D2R=Math.PI/180,CURB=4,PW=1.85,PL=4.8,PZ=CURB-.25-PW/2;
+// L length, W width, WB wheelbase, R rear-axle turning radius at full lock, off: metres past bumper alignment
+const VARIANTS={
+  small:{name:'Small hatchback',L:4.0,W:1.75,WB:2.5,R:4.6},
+  sedan:{name:'Mid-size sedan', L:4.8,W:1.85,WB:2.8,R:5.2},
+  suv:  {name:'SUV',            L:5.0,W:2.0, WB:2.95,R:5.7},
+};
+const GAP=.9;let OFF=0,SF=1.7;        // side gap when lining up; bumper overshoot past alignment; space = SF × car length (sim-checked: no clipping at 1.7)
+let V=VARIANTS.small,S=0,ANG=0;       // S: gap between parked cars; ANG: swing angle, both set in setVariant
+// s.x,s.y is the REAR AXLE (the car pivots about it); the body centre sits WB/2 ahead
+const cx=s=>s.x+V.WB/2*Math.cos(s.h),cz=s=>s.y-V.WB/2*Math.sin(s.h);
+const PH=[ // steer: -1..1 (left negative) ; dir: 1 forward, -1 reverse, 0 stopped
+  {steer:0,dir:1,until:s=>s.x-(V.L-V.WB)/2>=S/2+OFF,label:0},
+  {steer:0,dir:0,until:s=>s.t>0.6,label:0},
+  {steer:1,dir:0,until:s=>s.t>1.0,label:1},
+  {steer:1,dir:-1,until:s=>s.h>=ANG,label:1},
+  {steer:1,dir:0,until:s=>s.t>0.6,label:1},
+  {steer:0,dir:0,until:s=>s.t>1.0,label:2},
+  {steer:0,dir:-1,until:s=>s.y+V.R*(1-Math.cos(s.h))>=PZ-.02,label:2}, // stop when the final arc will land at the curb line
+  {steer:0,dir:0,until:s=>s.t>0.6,label:2},
+  {steer:-1,dir:0,until:s=>s.t>1.0,label:3},
+  {steer:-1,dir:-1,until:s=>s.h<=0,label:3,snap:0},
+  {steer:-1,dir:0,until:s=>s.t>0.6,label:3},
+  {steer:0,dir:0,until:s=>s.t>1.0,label:4},
+  {steer:0,dir:1,until:s=>cx(s)>=0,label:4},
+  {steer:0,dir:0,until:s=>s.t>2.5,label:4},
+];
+// heading h is counter-clockwise seen from above; world z grows toward the curb, so dz = -sin
+function corners(s){const c=Math.cos(s.h),sn=Math.sin(s.h),x0=cx(s),z0=cz(s),out=[];
+  for(const[a,b]of[[1,1],[1,-1],[-1,1],[-1,-1]]){const lx=a*V.L/2,ly=b*V.W/2;out.push([x0+lx*c-ly*sn,z0-(lx*sn+ly*c)])}return out}
+let s,pi,playing=true,last=0,odo=0,shown=0,onMove=()=>{},onPhase=()=>{};
+function setVariant(k){V=VARIANTS[k];S=Math.round(V.L*SF*10)/10;
+  // two equal arcs cover 2R(1-cos a) sideways; leave ~0.6 m for the straight leg so step 3 is visible
+  const D=PZ-(CURB-.25-PW-GAP-V.W/2);ANG=Math.acos(1-(D-.6*Math.sin(45*D2R))/(2*V.R));reset()}
+function reset(){s={x:-13,y:CURB-.25-PW-GAP-V.W/2,h:0,t:0};pi=0;odo=0;shown=0;onPhase(true)}
+function step(dt){const p=PH[pi];s.t+=dt;let v=0;
+  if(p.dir){v=(Math.abs(p.steer)===1?.9:1.6)*dt*p.dir;s.x+=v*Math.cos(s.h);s.y-=v*Math.sin(s.h);
+    if(p.steer)s.h+=Math.abs(v)/V.R*(p.steer*p.dir<0?1:-1);onMove()}
+  odo+=v;
+  if(p.until(s)){if(p.snap!==undefined)s.h=p.snap;pi++;s.t=0;if(pi>=PH.length){reset();return}onPhase()}
+  // displayed steer eases toward the phase's steer at 2/s, so a full-to-full wheel turn takes the 1 s stop
+  shown+=Math.max(-2*dt,Math.min(2*dt,p.steer-shown))}
+// ---------- three.js ----------
+const box=document.getElementById('scene');let ren;
+try{ren=new THREE.WebGLRenderer({antialias:true,powerPreference:'low-power'})}catch(e){fail('Could not start WebGL: '+(e&&e.message||e));return}
+ren.setPixelRatio(Math.min(devicePixelRatio,2));ren.shadowMap.enabled=true;box.prepend(ren.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x87a9c9);scene.fog=new THREE.Fog(0x87a9c9,40,90);
+const cam=new THREE.PerspectiveCamera(42,16/9,.1,300);
+scene.add(new THREE.HemisphereLight(0xdfe9f5,0x5a6b3c,.9));
+const sun=new THREE.DirectionalLight(0xfff2dc,1.1);sun.position.set(10,25,-8);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-30,right:30,top:20,bottom:-20,far:80});sun.shadow.camera.updateProjectionMatrix();scene.add(sun);
+const mat=(c,r=.9)=>new THREE.MeshStandardMaterial({color:c,roughness:r});
+const ROADW=10,len=80;
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(len,60),mat(0x7d9a5a,1));ground.rotation.x=-Math.PI/2;ground.position.set(0,-.02,CURB-ROADW/2);ground.receiveShadow=true;scene.add(ground);
+const road=new THREE.Mesh(new THREE.PlaneGeometry(len,ROADW),mat(0x4a4e55,.95));road.rotation.x=-Math.PI/2;road.position.set(0,0,CURB-ROADW/2);road.receiveShadow=true;scene.add(road);
+const curb=new THREE.Mesh(new THREE.BoxGeometry(len,.15,.5),mat(0xb8ab85));curb.position.set(0,.075,CURB+.25);curb.castShadow=curb.receiveShadow=true;scene.add(curb);
+const walk=new THREE.Mesh(new THREE.PlaneGeometry(len,3),mat(0xc9c2b2,1));walk.rotation.x=-Math.PI/2;walk.position.set(0,.15,CURB+2);walk.receiveShadow=true;scene.add(walk);
+for(let x=-40;x<40;x+=3.2){const d=new THREE.Mesh(new THREE.PlaneGeometry(1.8,.14),mat(0xe8dfb8,.8));d.rotation.x=-Math.PI/2;d.position.set(x,.005,CURB-ROADW/2);scene.add(d)}
+// trail ribbon (WebGL ignores line width)
+const TN=6000,TW=.14,tgeo=new THREE.BufferGeometry();
+tgeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(TN*2*3),3));tgeo.setIndex(new THREE.BufferAttribute(new Uint16Array((TN-1)*6),1));tgeo.setDrawRange(0,0);
+const trail=new THREE.Mesh(tgeo,new THREE.MeshBasicMaterial({color:0x1f6fb2,side:THREE.DoubleSide,depthWrite:false}));trail.renderOrder=1;scene.add(trail);
+let trailN=0,px=0,pz=0;
+function pushTrail(){if(trailN>=TN)return;const x=cx(s),z=cz(s),a=tgeo.attributes.position,ix=tgeo.index;
+  if(trailN&&Math.hypot(x-px,z-pz)<.04)return;
+  let nx=0,nz=TW/2;if(trailN){const dx=x-px,dz=z-pz,l=Math.hypot(dx,dz)||1;nx=-dz/l*TW/2;nz=dx/l*TW/2;
+    if(trailN===1){a.setXYZ(0,px+nx,.03,pz+nz);a.setXYZ(1,px-nx,.03,pz-nz)}}
+  a.setXYZ(trailN*2,x+nx,.03,z+nz);a.setXYZ(trailN*2+1,x-nx,.03,z-nz);a.needsUpdate=true;
+  if(trailN){const q=(trailN-1)*6,b=(trailN-1)*2;ix.set([b,b+1,b+2,b+1,b+3,b+2],q);ix.needsUpdate=true;tgeo.setDrawRange(0,trailN*6)}
+  px=x;pz=z;trailN++}
+// cars (local: +x forward, +z right)
+const glass=new THREE.MeshStandardMaterial({color:0x9fc4d8,roughness:.1,metalness:.3}),dark=mat(0x1a1a1a,.7);
+const wgeo=new THREE.CylinderGeometry(.3,.3,.22,24);wgeo.rotateX(Math.PI/2);
+function buildCar(L,W,WB,color,tall){const g=new THREE.Group(),body=mat(color,.45),H=tall?.7:.55;
+  const add=(geo,m,x,y,z,parent=g)=>{const o=new THREE.Mesh(geo,m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;parent.add(o);return o};
+  add(new THREE.BoxGeometry(L,H,W),body,0,.3+H/2,0);
+  add(new THREE.BoxGeometry(L*(tall?.62:.52),tall?.6:.5,W*.86),body,-.15,.3+H+(tall?.3:.25),0);
+  add(new THREE.BoxGeometry(.06,.42,W*.78),glass,L*(tall?.31:.26)-.1,.3+H+.25,0);
+  add(new THREE.BoxGeometry(.06,.38,W*.78),glass,-L*(tall?.31:.26)-.2,.3+H+.25,0);
+  add(new THREE.BoxGeometry(.08,.14,.3),mat(0xfff0b0,.3),L/2,.5,W/2-.3);add(new THREE.BoxGeometry(.08,.14,.3),mat(0xfff0b0,.3),L/2,.5,-W/2+.3);
+  const tl=[add(new THREE.BoxGeometry(.08,.14,.3),mat(0x8a1a10,.4),-L/2,.5,W/2-.3),add(new THREE.BoxGeometry(.08,.14,.3),mat(0x8a1a10,.4),-L/2,.5,-W/2+.3)];
+  const front=[],rolls=[];
+  for(const[a,b]of[[1,1],[1,-1],[-1,1],[-1,-1]]){const hub=new THREE.Group();hub.position.set(a*WB/2,.3,b*(W/2-.05));g.add(hub);
+    const w=add(wgeo,dark,0,0,0,hub);rolls.push(w);if(a>0)front.push(hub)}
+  return{g,tl,front,rolls}}
+let car=null;const parked=[];
+function placeParked(){for(const p of parked)scene.remove(p);parked.length=0;
+  for(const[x,c,t]of[[S/2+PL/2,0x8a8f99,false],[-S/2-PL/2,0x5c6a7a,false],[S/2+PL*1.5+1.2,0xd8d2c4,true],[-S/2-PL*1.5-1.2,0x6a4b3a,false]]){
+    const o=buildCar(PL,PW,2.8,c,t).g;o.position.set(x,0,PZ);scene.add(o);parked.push(o)}}
+function rebuild(){if(car)scene.remove(car.g);car=buildCar(V.L,V.W,V.WB,0xc8472c,V===VARIANTS.suv);scene.add(car.g);placeParked();
+  spec.textContent=`${V.name} · ${V.L.toFixed(1)} m long · space ${S.toFixed(1)} m (${SF}× car)`;
+  trailN=0;tgeo.setDrawRange(0,0)}
+onMove=pushTrail;onPhase=full=>{if(full){trailN=0;tgeo.setDrawRange(0,0)}document.querySelectorAll('.step').forEach((e,i)=>e.classList.toggle('on',i===PH[pi].label))};
+// camera
+let camMode=0;const modes=['wide','chase','top'],look=new THREE.Vector3(0,0,CURB-2),orb={x:0,y:0};cam.position.set(0,9,CURB-16);
+function placeCam(dt){const tgt=new THREE.Vector3(),pos=new THREE.Vector3();
+  if(camMode===0){tgt.set(0,0,CURB-1.5);pos.set(orb.x,9+orb.y,CURB-16)}
+  else if(camMode===1){const x=cx(s),z=cz(s);tgt.set(x,.6,z);pos.set(x-Math.cos(s.h)*7,4,z+Math.sin(s.h)*7)}
+  else{tgt.set(0,0,CURB-2);pos.set(.01,24,CURB-2)}
+  cam.position.lerp(pos,Math.min(1,dt*4));look.lerp(tgt,Math.min(1,dt*4));cam.lookAt(look)}
+let drag=null;box.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY,orb.x,orb.y]});
+addEventListener('pointermove',e=>{if(!drag)return;orb.x=drag[2]-(e.clientX-drag[0])*.04;orb.y=Math.max(-6,Math.min(14,drag[3]+(e.clientY-drag[1])*.04))});
+addEventListener('pointerup',()=>drag=null);
+// hud
+const names=['1 · Pull alongside, line up rear bumpers','2 · Turn wheel full right, then back up to 45°','3 · Straighten wheel, then back up until clear','4 · Turn wheel full left, then back up parallel','5 · Straighten, then pull forward to centre'];
+const hn=document.getElementById('hname'),hm=document.getElementById('hmode'),ws=document.getElementById('wsvg'),wl=document.getElementById('wlabel');
+function hud(p){hn.textContent=names[p.label];hm.textContent=p.dir<0?'Reverse':p.dir>0?'Drive':'Stopped';
+  ws.style.transform=`rotate(${shown*130}deg)`;wl.textContent=shown<-.9?'full left':shown>.9?'full right':Math.abs(shown)>.05?(shown<0?'left':'right'):'straight'}
+function render(){const p=PH[pi];car.g.position.set(cx(s),0,cz(s));car.g.rotation.y=s.h;
+  for(const f of car.front)f.rotation.y=-shown*35*D2R;for(const w of car.rolls)w.rotation.z=-odo/.3;
+  car.tl.forEach(m=>m.material.color.set(p.dir<0?0xffffff:0x8a1a10));hud(p)}
+let cw=0,ch=0;
+function size(){const w=box.clientWidth||box.offsetWidth,h=box.clientHeight||Math.round(w*9/16);if(!w||(w===cw&&h===ch))return;cw=w;ch=h;ren.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
+addEventListener('resize',size);if(window.ResizeObserver)new ResizeObserver(size).observe(box);
+ren.domElement.addEventListener('webglcontextlost',()=>fail('Graphics context lost. Reload the page.'));
+let frames=0,shownErr=false;
+function loop(ts){requestAnimationFrame(loop);const raw=Math.min(0.05,(ts-last)/1000||0);last=ts;
+  try{size();if(playing)step(raw*+spd.value);render();placeCam(raw);ren.render(scene,cam);frames++}
+  catch(e){if(!shownErr){shownErr=true;fail('Render error: '+(e&&e.message||e))}}}
+setTimeout(()=>{if(!frames)fail('No frames drawn. Size '+cw+'x'+ch)},2500);
+play.onclick=()=>{playing=!playing;play.textContent=playing?'Pause':'Play'};
+restart.onclick=reset;
+next.onclick=()=>{const lbl=PH[pi].label;let g=0;while(PH[pi].label===lbl&&g++<8000)step(0.02)};
+document.getElementById('cam').onclick=e=>{camMode=(camMode+1)%3;e.target.textContent='Camera: '+modes[camMode]};
+document.getElementById('variants').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('#variants button').forEach(x=>x.classList.toggle('on',x===b));setVariant(b.dataset.v);rebuild()};
+setVariant('small');rebuild();requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
